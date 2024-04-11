@@ -1,50 +1,109 @@
-import requests
-import requests as rq
+from tkinter import messagebox
+
 import os
-import sys
+import requests
 
 from urllib3.exceptions import InsecureRequestWarning
 
 requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 
 
-def loading_files() -> None:
-
-    url = "https://185.106.92.10/game/sight1"
-    file = open("hash.txt", "r")
-    data = [x.replace("\n", '') for x in file.readlines() if x != '' or x != '\n']
-    file.close()
-
-    data = ("other".join(data)).replace("[", "").replace("]", "").split(",other")
-
-    data = [x[x.index("/")+1:x.index(",")-1] for x in data]
-
-    count_data = len(data)
-    counter = 0
-    for item in data:
-        abs_url = url + item
-        way = ("../InstallerME2/files/" + item[item.rindex('/')+1:])
-
-        try:
-            r = requests.get(abs_url, verify=False, timeout=None, cert=False)
-            with open(way, "wb") as f:
-                f.write(r.content)
-
-            #print("Downloading " + item[item.rindex('/')+1:] + " is done")
-
-            counter += 1
-
-            progress = counter / count_data * 100
-
-            sys.stdout.write("\r" + f"{progress:5.2f}%" + " " + f"{counter}" + "/" + f"{count_data}" +
-                             " " + "Downloading " + item[item.rindex('/')+1:] + " is done")
-            sys.stdout.flush()
-
-        except rq.exceptions.ConnectionError:
-            continue
-
-    print(counter)
+def converter(file_path: str) -> list:
+    try:
+        with open(file_path, "r") as f:
+            return eval(f.read())
+    except FileNotFoundError:
+        messagebox.showwarning("Ошибка", "Файл hash.txt не найден")
+        return []
 
 
-if __name__ == "__main__":
-    loading_files()
+class InstallerME2:
+    def __init__(self):
+        self.url = "https://185.106.92.10/game/sight1"
+        self.data = converter("hash.txt")
+        self.not_installed = []
+        self.installed = []
+        self.current_folder_for_install = "C:/Users/admin/Other/TestingInstallerME2"    # filedialog потом добавить
+        self.progress_bar = 0.0
+        self.dirs_for_installed_files = self.get_dirs_for_install()
+        self.dirs_to_install = False
+
+    def set_current_folder_for_install(self):
+        self.current_folder_for_install = ""    # Вставить сюда работу filedialog
+
+    def exist_current_folder_for_install(self):
+        return os.path.exists(self.current_folder_for_install)
+
+    def get_dirs_for_install(self):
+        directories = []
+        for item in [name.replace("//", "") for name in self.get_names_files()]:
+            directories.append(item[item.index('/'): item.rindex('/')])
+        return list(set(directories))
+
+    def make_dirs(self):
+        for folder in self.dirs_for_installed_files:
+            if not os.path.exists(self.current_folder_for_install + folder):
+                if folder.count('/') == 1:
+                    os.mkdir(self.current_folder_for_install + folder)
+                else:
+                    if not os.path.exists(self.current_folder_for_install + folder[:folder.rindex('/')]):
+                        os.mkdir(self.current_folder_for_install + folder[:folder.rindex('/')])
+                    os.mkdir(self.current_folder_for_install + folder)
+            else:
+                continue
+
+    def get_names_files(self) -> list:
+        names_files = [item["name"].replace("../", "") for item in self.data]
+        return names_files
+
+    def update_progress_bar(self):
+        self.progress_bar = self.installed.__len__() / self.data.__len__() * 100
+
+    @staticmethod
+    def get_response(url):
+        return requests.get(url, verify=False, timeout=None, cert=False)
+
+    def loading_files(self):
+        dirs = self.dirs_for_installed_files
+
+        for name in self.get_names_files():
+            abs_url = self.url + name
+            way = (self.current_folder_for_install + name.replace("/Contents", ""))
+
+            print(abs_url)
+            print(way)
+
+            # try:
+            #     r = self.get_response(abs_url)
+            #
+            #     with open(way, "wb") as f:
+            #         f.write(r.content)
+            #
+            #     self.installed.append(name)
+            #     self.update_progress_bar()
+            #
+            # except requests.exceptions.ConnectionError:
+            #     self.not_installed.append(name)
+
+    def try_to_install_not_installed(self):
+        for name in self.not_installed:
+            abs_url = self.url + name
+            way = (self.current_folder_for_install + name.replace("/Contents", ""))
+
+            try:
+                r = self.get_response(abs_url)
+
+                with open(way, "wb") as f:
+                    f.write(r.content)
+
+                self.installed.append(name)
+                self.update_progress_bar()
+
+            except requests.exceptions.ConnectionError:
+                continue
+
+        self.not_installed = [name for name in self.installed if not self.not_installed.__contains__(name)]
+
+
+install = InstallerME2()
+print(install.loading_files())
