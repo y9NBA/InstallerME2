@@ -1,109 +1,96 @@
+from tkinter import *
+from tkinter import ttk
+from tkinter import filedialog
 from tkinter import messagebox
 
-import os
-import requests
-
-from urllib3.exceptions import InsecureRequestWarning
-
-requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
+from installer import *
 
 
-def converter(file_path: str) -> list:
-    try:
-        with open(file_path, "r") as f:
-            return eval(f.read())
-    except FileNotFoundError:
-        messagebox.showwarning("Ошибка", "Файл hash.txt не найден")
-        return []
-
-
-class InstallerME2:
+class GUI(Tk):
     def __init__(self):
-        self.url = "https://185.106.92.10/game/sight1"
-        self.data = converter("hash.txt")
-        self.not_installed = []
-        self.installed = []
-        self.current_folder_for_install = "C:/Users/admin/Other/TestingInstallerME2"    # filedialog потом добавить
-        self.progress_bar = 0.0
-        self.dirs_for_installed_files = self.get_dirs_for_install()
-        self.dirs_to_install = False
+        self.tk = Tk()
+        self.tk.geometry("600x500")
+        self.tk.title("Установщик")
 
-    def set_current_folder_for_install(self):
-        self.current_folder_for_install = ""    # Вставить сюда работу filedialog
+        self.panelFrame = Frame(self.tk, height=60, bg='gray')
+        self.panelFrameUnderPanelFrame = Frame(self.tk, height=50, bg='gray')
+        self.panelFrameBottom = Frame(self.tk, height=60, bg='gray')
+        self.textFrame = Frame(self.tk, height=340, width=600)
 
-    def exist_current_folder_for_install(self):
-        return os.path.exists(self.current_folder_for_install)
+        self.panelFrame.pack(side='top', fill=X)
+        self.panelFrameUnderPanelFrame.pack(side='top', fill=X)
+        self.panelFrameBottom.pack(side='bottom', fill=X)
+        self.textFrame.pack(side='bottom', fill='both', expand=1)
 
-    def get_dirs_for_install(self):
-        directories = []
-        for item in [name.replace("//", "") for name in self.get_names_files()]:
-            directories.append(item[item.index('/'): item.rindex('/')])
-        return list(set(directories))
+        self.textbox = Text(self.textFrame, font='Arial 10', wrap='word')
+        self.scrollbar = Scrollbar(self.textFrame)
 
-    def make_dirs(self):
-        for folder in self.dirs_for_installed_files:
-            if not os.path.exists(self.current_folder_for_install + folder):
-                if folder.count('/') == 1:
-                    os.mkdir(self.current_folder_for_install + folder)
-                else:
-                    if not os.path.exists(self.current_folder_for_install + folder[:folder.rindex('/')]):
-                        os.mkdir(self.current_folder_for_install + folder[:folder.rindex('/')])
-                    os.mkdir(self.current_folder_for_install + folder)
+        self.scrollbar['command'] = self.textbox.yview
+        self.textbox['yscrollcommand'] = self.scrollbar.set
+
+        self.textbox.pack(side='left', fill='both', expand=1)
+        self.scrollbar.pack(side='right', fill='y')
+
+        self.entry = ttk.Entry(self.panelFrame, width=200)
+        self.entry.place(x=25, y=10, width=400, height=30)
+        self.entry.bind('<Return>', self.exist_cmd)
+
+        self.progress_bar = ttk.Progressbar(self.panelFrameUnderPanelFrame, orient='horizontal', mode='determinate')
+        self.progress_bar.place(x=25, y=10, width=500, height=30)
+
+        self.value_progress = ttk.Label(self.panelFrameUnderPanelFrame, font='Arial 10', foreground="black", text="0.0%")
+        self.value_progress.place(x=530, y=10, width=50, height=30)
+
+        self.loadBtn = ttk.Button(self.panelFrame, text='Выбрать папку')
+        self.nextBtn = ttk.Button(self.panelFrameBottom, text='Установка')
+        self.quitBtn = ttk.Button(self.panelFrameBottom, text='Отмена')
+
+        self.loadBtn.bind("<Button-1>", self.load_folder)
+        self.nextBtn.bind("<Button-1>", self.install_cmd)
+        self.quitBtn.bind("<Button-1>", self.quit_app)
+
+        self.loadBtn.place(x=460, y=10, width=100, height=30)
+        self.nextBtn.place(x=425, y=10, width=70, height=30)
+        self.quitBtn.place(x=500, y=10, width=60, height=30)
+
+        self.tk.after(1000, self.task)
+
+    def task(self):
+        if not installer_me2.installed:
+            installer_me2.loading_files(self.textbox, (self.progress_bar, self.value_progress))
+            self.tk.after(500, self.task)
+        else:
+            self.tk.after(1000, self.task)
+
+    def quit_app(self, ev):
+        self.tk.destroy()
+
+    def load_folder(self, ev):
+        fn = filedialog.askdirectory()
+        if fn == '':
+            return
+        self.entry.delete('0', 'end')
+        self.entry.insert('0', os.path.abspath(fn))
+        installer_me2.set_current_folder_for_install(self.entry.get())
+
+    def install_cmd(self, ev):
+        if self.exist_cmd(ev):
+            installer_me2.make_dirs()
+            installer_me2.installed = False
+            print(installer_me2.installed)
+
+    def exist_cmd(self, ev):
+        if installer_me2.data is None:
+            messagebox.showerror("ФАТАЛЬНАЯ ОШИБКА", "Отсутствует файл data.txt")
+            self.quit_app(ev)
+        else:
+            if installer_me2.set_current_folder_for_install(self.entry.get()):
+                messagebox.showinfo("Информация", "Всё отлично, установка началась")
+                return True
             else:
-                continue
-
-    def get_names_files(self) -> list:
-        names_files = [item["name"].replace("../", "") for item in self.data]
-        return names_files
-
-    def update_progress_bar(self):
-        self.progress_bar = self.installed.__len__() / self.data.__len__() * 100
-
-    @staticmethod
-    def get_response(url):
-        return requests.get(url, verify=False, timeout=None, cert=False)
-
-    def loading_files(self):
-        dirs = self.dirs_for_installed_files
-
-        for name in self.get_names_files():
-            abs_url = self.url + name
-            way = (self.current_folder_for_install + name.replace("/Contents", ""))
-
-            print(abs_url)
-            print(way)
-
-            # try:
-            #     r = self.get_response(abs_url)
-            #
-            #     with open(way, "wb") as f:
-            #         f.write(r.content)
-            #
-            #     self.installed.append(name)
-            #     self.update_progress_bar()
-            #
-            # except requests.exceptions.ConnectionError:
-            #     self.not_installed.append(name)
-
-    def try_to_install_not_installed(self):
-        for name in self.not_installed:
-            abs_url = self.url + name
-            way = (self.current_folder_for_install + name.replace("/Contents", ""))
-
-            try:
-                r = self.get_response(abs_url)
-
-                with open(way, "wb") as f:
-                    f.write(r.content)
-
-                self.installed.append(name)
-                self.update_progress_bar()
-
-            except requests.exceptions.ConnectionError:
-                continue
-
-        self.not_installed = [name for name in self.installed if not self.not_installed.__contains__(name)]
+                messagebox.showerror("Ошибка", "Такой папки не существует")
+                return False
 
 
-install = InstallerME2()
-print(install.loading_files())
+root = GUI()
+root.mainloop()
